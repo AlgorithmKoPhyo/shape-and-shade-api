@@ -1,0 +1,55 @@
+name: Shape & Shade CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  continuous-integration:
+    name: Build, Download Model & Run Pytest
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 1. Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 2. Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: 3. Install Linux System Libraries (OpenCV & MediaPipe)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1 libglib2.0-0
+
+      - name: 4. Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 5. Download MediaPipe Face Landmarker Model
+        run: |
+          python scripts/download_model.py
+
+      - name: 6. Run Automated Unit & API Tests
+        run: |
+          pytest -v
+
+  continuous-deployment:
+    name: Package & Verify Deployment Readiness
+    needs: continuous-integration
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Deployment Gate Passed
+        run: |
+          echo "All vision extraction, RGB/Lab matrix, and API tests passed!"
+          echo "Shape & Shade service is verified and ready for production deployment."

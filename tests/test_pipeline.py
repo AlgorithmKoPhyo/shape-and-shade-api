@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 from fastapi.testclient import TestClient
 
@@ -13,6 +15,8 @@ from app.core.image_processing import (
 )
 from app.core.skin_extractor import SkinRegionExtractor
 from app.main import app
+
+ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 
 
 def test_resize_and_white_balance() -> None:
@@ -49,7 +53,9 @@ def test_api_health_and_no_face_handling() -> None:
     with TestClient(app) as client:
         health_res = client.get("/health")
         assert health_res.status_code == 200
-        assert health_res.json()["face_model_loaded"] is True
+        health_data = health_res.json()
+        assert health_data["face_model_loaded"] is True
+        assert health_data["undertone_model_loaded"] is True
 
         # Send a blank image (no face) and verify clean 422 error response
         import cv2
@@ -62,3 +68,35 @@ def test_api_health_and_no_face_handling() -> None:
         )
         assert res.status_code == 422
         assert res.json()["error_code"] == "FACE_NOT_DETECTED"
+
+
+def test_end_to_end_lena_extraction_and_undertone() -> None:
+    lena_path = ASSETS_DIR / "lena.jpg"
+    assert lena_path.is_file(), f"Missing test asset: {lena_path}"
+
+    with TestClient(app) as client:
+        with lena_path.open("rb") as image_file:
+            res = client.post(
+                "/api/v1/extract-skin-regions",
+                files={"file": ("lena.jpg", image_file, "image/jpeg")},
+            )
+
+        assert res.status_code == 200
+        payload = res.json()
+        assert payload["status"] == "success"
+        assert payload["patch_dimensions"] == f"{STANDARD_PATCH_SIZE}x{STANDARD_PATCH_SIZE}"
+        assert payload["total_pixels_per_patch"] == TOTAL_PATCH_PIXELS
+
+        # Stage 1 check: 4 facial skin region pixel matrices (225 pixels each)
+        region_patches = payload["region_patches"]
+        for region in ("forehead", "left_cheek", "right_cheek", "chin"):
+            assert region in region_patches
+            assert len(region_patches[region]["rgb_pixels"]) == TOTAL_PATCH_PIXELS
+            assert len(region_patches[region]["lab_pixels"]) == TOTAL_PATCH_PIXELS
+
+        # Stage 2 check: Undertone ML prediction + 12D features
+        undertone_data = payload["undertone_analysis"]
+        assert undertone_data["undertone"] in {"warm", "cool", "neutral"}
+        assert 0.0 <= undertone_data["confidence"] <= 1.0
+        assert set(undertone_data["probabilities"].keys()) == {"warm", "cool", "neutral"}
+        assert len(undertone_data["features"]) == 12

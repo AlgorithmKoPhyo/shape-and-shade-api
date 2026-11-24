@@ -11,13 +11,14 @@ import joblib
 import numpy as np
 from sklearn.preprocessing import LabelEncoder
 
-from app.core.feature_extraction import FEATURE_KEYS
+from app.core.image_processing import FEATURE_KEYS
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "undertone_model.pkl"
-DEFAULT_ENCODER_PATH = Path(__file__).resolve().parent.parent / "models" / "label_encoder.pkl"
-DEFAULT_METRICS_PATH = Path(__file__).resolve().parent.parent / "models" / "training_metrics.json"
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+DEFAULT_MODEL_PATH = BASE_DIR / "models" / "undertone_model.pkl"
+DEFAULT_ENCODER_PATH = BASE_DIR / "models" / "label_encoder.pkl"
+DEFAULT_METRICS_PATH = BASE_DIR / "models" / "training_metrics.json"
 
 
 class UndertoneModelNotFoundError(FileNotFoundError):

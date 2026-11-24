@@ -1,0 +1,107 @@
+{
+  "timestamp_utc": "2026-11-24T07:19:23.955789+00:00",
+  "num_samples": 3,
+  "class_counts": {
+    "cool": 1,
+    "neutral": 1,
+    "warm": 1
+  },
+  "feature_columns": [
+    "mean_L",
+    "mean_a",
+    "mean_b",
+    "std_L",
+    "std_a",
+    "std_b",
+    "mean_R",
+    "mean_G",
+    "mean_B",
+    "std_R",
+    "std_G",
+    "std_B"
+  ],
+  "cross_validation": {
+    "folds": 3,
+    "accuracy_mean": 0.0,
+    "accuracy_std": 0.0,
+    "accuracy_scores": [
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "training_accuracy": 0.3333,
+  "confusion_matrix": {
+    "labels": [
+      "cool",
+      "neutral",
+      "warm"
+    ],
+    "matrix": [
+      [
+        0,
+        0,
+        1
+      ],
+      [
+        0,
+        0,
+        1
+      ],
+      [
+        0,
+        0,
+        1
+      ]
+    ]
+  },
+  "classification_report": {
+    "cool": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 1.0
+    },
+    "neutral": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 1.0
+    },
+    "warm": {
+      "precision": 0.3333333333333333,
+      "recall": 1.0,
+      "f1-score": 0.5,
+      "support": 1.0
+    },
+    "accuracy": 0.3333333333333333,
+    "macro avg": {
+      "precision": 0.1111111111111111,
+      "recall": 0.3333333333333333,
+      "f1-score": 0.16666666666666666,
+      "support": 3.0
+    },
+    "weighted avg": {
+      "precision": 0.1111111111111111,
+      "recall": 0.3333333333333333,
+      "f1-score": 0.16666666666666666,
+      "support": 3.0
+    }
+  },
+  "feature_importances": {
+    "mean_L": 0.0,
+    "mean_a": 0.0,
+    "mean_b": 0.0,
+    "std_L": 0.0,
+    "std_a": 0.0,
+    "std_b": 0.0,
+    "mean_R": 0.0,
+    "mean_G": 0.0,
+    "mean_B": 0.0,
+    "std_R": 0.0,
+    "std_G": 0.0,
+    "std_B": 0.0
+  },
+  "model_type": "RandomForestClassifier",
+  "failed_files": []
+}

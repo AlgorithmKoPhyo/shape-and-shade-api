@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Skin Tone Analysis</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --surface-2: #243044;
+      --border: #334155;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-hover: #0ea5e9;
+      --success: #34d399;
+      --error: #f87171;
+      --forehead: #f472b6;
+      --left-cheek: #60a5fa;
+      --right-cheek: #a78bfa;
+      --chin: #fbbf24;
+      --radius: 12px;
+      --shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: linear-gradient(160deg, #0b1020 0%, #111827 45%, #0f172a 100%);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.5rem 1rem 3rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    header h1 {
+      font-size: clamp(1.5rem, 4vw, 2rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    header p {
+      color: var(--muted);
+      margin-top: 0.5rem;
+      font-size: 0.95rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.25rem;
+    }
+
+    @media (min-width: 900px) {
+      .grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 1.25rem;
+    }
+
+    .card h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: var(--text);
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin-bottom: 1rem;
+    }
+
+    button,
+    .file-label {
+      appearance: none;
+      border: none;
+      border-radius: 8px;
+      padding: 0.65rem 1rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s, opacity 0.15s;
+    }
+
+    button:active:not(:disabled) {
+      transform: scale(0.98);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #082f49;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
+
+    .btn-secondary {
+      background: var(--surface-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: #2d3a50;
+    }
+
+    .file-label {
+      display: inline-flex;
+      align-items: center;
+      background: var(--surface-2);
+      color: var(--text);
+      border: 1px dashed var(--border);
+    }
+
+    .file-label:hover {
+      border-color: var(--accent);
+    }
+
+    input[type="file"] {
+      display: none;
+    }
+
+    .preview-wrap {
+      position: relative;
+      background: #0b1220;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      min-height: 220px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .preview-wrap.empty::before {
+      content: "Camera preview or uploaded image will appear here";
+      color: var(--muted);
+      font-size: 0.9rem;
+      padding: 2rem;
+      text-align: center;
+    }
+
+    video,
+    #overlayCanvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      max-height: 420px;
+      object-fit: contain;
+    }
+
+    #overlayCanvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .status {
+      margin-top: 0.85rem;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      border: 1px solid transparent;
+    }
+
+    .status.info {
+      background: rgba(56, 189, 248, 0.1);
+      border-color: rgba(56, 189, 248, 0.25);
+      color: #bae6fd;
+    }
+
+    .status.success {
+      background: rgba(52, 211, 153, 0.1);
+      border-color: rgba(52, 211, 153, 0.25);
+      color: #a7f3d0;
+    }
+
+    .status.error {
+      background: rgba(248, 113, 113, 0.1);
+      border-color: rgba(248, 113, 113, 0.25);
+      color: #fecaca;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-top: 0.85rem;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+    }
+
+    .patches-section {
+      margin-top: 1.25rem;
+    }
+
+    .patches-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 1rem;
+    }
+
+    .patch-card {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.85rem;
+      text-align: center;
+    }
+
+    .patch-card h3 {
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 0.65rem;
+    }
+
+    .patch-image-wrap {
+      width: 90px;
+      height: 90px;
+      margin: 0 auto 0.65rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .patch-image-wrap img {
+      width: 100%;
+      height: 100%;
+      image-rendering: pixelated;
+      object-fit: contain;
+    }
+
+    .swatch {
+      width: 100%;
+      height: 36px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      margin-bottom: 0.45rem;
+    }
+
+    .rgb-label {
+      font-size: 0.78rem;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .meta {
+      margin-top: 0.75rem;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255, 255, 255, 0.25);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: -2px;
+      margin-right: 0.35rem;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    footer {
+      text-align: center;
+      margin-top: 2rem;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+
+    footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Skin Tone Analysis</h1>
+      <p>Capture or upload a face image to extract skin regions and color samples.</p>
+    </header>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Webcam Capture</h2>
+        <div class="controls">
+          <button id="startCameraBtn" class="btn-primary" type="button">Start Camera</button>
+          <button id="stopCameraBtn" class="btn-secondary hidden" type="button">Stop Camera</button>
+          <button id="captureBtn" class="btn-secondary" type="button" disabled>Capture &amp; Analyze</button>
+        </div>
+        <div id="webcamWrap" class="preview-wrap empty">
+          <video id="webcamVideo" class="hidden" autoplay playsinline muted></video>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>File Upload</h2>
+        <div class="controls">
+          <label class="file-label" for="fileInput">Choose .jpg / .png</label>
+          <input id="fileInput" type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png">
+          <button id="uploadAnalyzeBtn" class="btn-primary" type="button" disabled>Analyze Upload</button>
+        </div>
+        <div id="uploadWrap" class="preview-wrap empty">
+          <img id="uploadPreview" class="hidden" alt="Uploaded preview">
+        </div>
+      </section>
+    </div>
+
+    <section class="card" style="margin-top: 1.25rem;">
+      <h2>Analysis Results</h2>
+      <div id="resultsWrap" class="preview-wrap empty">
+        <canvas id="overlayCanvas" class="hidden"></canvas>
+      </div>
+
+      <div class="legend hidden" id="legend">
+        <span class="legend-item"><span class="legend-dot" style="background: var(--forehead);"></span>Forehead</span>
+        <span class="legend-item"><span class="legend-dot" style="background: var(--left-cheek);"></span>Left Cheek</span>
+        <span class="legend-item"><span class="legend-dot" style="background: var(--right-cheek);"></span>Right Cheek</span>
+        <span class="legend-item"><span class="legend-dot" style="background: var(--chin);"></span>Chin</span>
+      </div>
+
+      <div id="statusBox" class="status info hidden"></div>
+      <div id="metaBox" class="meta hidden"></div>
+
+      <div class="patches-section hidden" id="patchesSection">
+        <h2 id="patchesHeading" style="margin-bottom: 0.85rem;">Extracted Skin Patches</h2>
+        <div class="patches-grid" id="patchesGrid"></div>
+      </div>
+    </section>
+
+    <footer>
+      API docs at <a href="/docs" target="_blank" rel="noopener">/docs</a>
+    </footer>
+  </div>
+
+  <canvas id="captureCanvas" class="hidden"></canvas>
+
+  <script>
+    const REGION_ORDER = ["chin", "left_cheek", "right_cheek", "forehead"];
+    const REGION_LABELS = {
+      chin: "Chin",
+      left_cheek: "Left Cheek",
+      right_cheek: "Right Cheek",
+      forehead: "Forehead",
+    };
+    const REGION_COLORS = {
+      forehead: "#f472b6",
+      left_cheek: "#60a5fa",
+      right_cheek: "#a78bfa",
+      chin: "#fbbf24",
+    };
+
+    const startCameraBtn = document.getElementById("startCameraBtn");
+    const stopCameraBtn = document.getElementById("stopCameraBtn");
+    const captureBtn = document.getElementById("captureBtn");
+    const fileInput = document.getElementById("fileInput");
+    const uploadAnalyzeBtn = document.getElementById("uploadAnalyzeBtn");
+    const webcamVideo = document.getElementById("webcamVideo");
+    const webcamWrap = document.getElementById("webcamWrap");
+    const uploadPreview = document.getElementById("uploadPreview");
+    const uploadWrap = document.getElementById("uploadWrap");
+    const overlayCanvas = document.getElementById("overlayCanvas");
+    const resultsWrap = document.getElementById("resultsWrap");
+    const captureCanvas = document.getElementById("captureCanvas");
+    const statusBox = document.getElementById("statusBox");
+    const metaBox = document.getElementById("metaBox");
+    const patchesHeading = document.getElementById("patchesHeading");
+    const patchesSection = document.getElementById("patchesSection");
+    const patchesGrid = document.getElementById("patchesGrid");
+
+    const legend = document.getElementById("legend");
+    let selectedFile = null;
+    let lastSourceImage = null;
+
+    function setStatus(message, type = "info") {
+      statusBox.textContent = message;
+      statusBox.className = `status ${type}`;
+      statusBox.classList.remove("hidden");
+    }
+
+    function setLoading(isLoading, message = "Analyzing image...") {
+      if (isLoading) {
+        statusBox.innerHTML = `<span class="spinner"></span>${message}`;
+        statusBox.className = "status info";
+        statusBox.classList.remove("hidden");
+      }
+    }
+
+    function disableControls(disabled) {
+      startCameraBtn.disabled = disabled;
+      captureBtn.disabled = disabled || !mediaStream;
+      uploadAnalyzeBtn.disabled = disabled || !selectedFile;
+      fileInput.disabled = disabled;
+    }
+
+    async function startCamera() {
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
+        });
+        webcamVideo.srcObject = mediaStream;
+        webcamVideo.classList.remove("hidden");
+        webcamWrap.classList.remove("empty");
+        startCameraBtn.classList.add("hidden");
+        stopCameraBtn.classList.remove("hidden");
+        captureBtn.disabled = false;
+        setStatus("Camera active. Position your face and click Capture & Analyze.", "info");
+      } catch (err) {
+        setStatus(`Camera access failed: ${err.message}`, "error");
+      }
+    }
+
+    function stopCamera() {
+      if (mediaStream) {
+        mediaStream.getTracks().forEach((track) => track.stop());
+        mediaStream = null;
+      }
+      webcamVideo.srcObject = null;
+      webcamVideo.classList.add("hidden");
+      webcamWrap.classList.add("empty");
+      startCameraBtn.classList.remove("hidden");
+      stopCameraBtn.classList.add("hidden");
+      captureBtn.disabled = true;
+    }
+
+    function loadImageFromBlob(blob) {
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = () => {
+          URL.revokeObjectURL(url);
+          resolve(img);
+        };
+        img.onerror = reject;
+        img.src = url;
+      });
+    }
+
+    function scaleBbox(bbox, scaleX, scaleY) {
+      return {
+        x1: Math.round(bbox.x1 * scaleX),
+        y1: Math.round(bbox.y1 * scaleY),
+        x2: Math.round(bbox.x2 * scaleX),
+        y2: Math.round(bbox.y2 * scaleY),
+      };
+    }
+
+    function drawOverlay(sourceImage, regions, scaleX, scaleY) {
+      const maxWidth = Math.min(sourceImage.width, resultsWrap.clientWidth || 900);
+      const displayScale = maxWidth / sourceImage.width;
+      const displayWidth = Math.round(sourceImage.width * displayScale);
+      const displayHeight = Math.round(sourceImage.height * displayScale);
+
+      overlayCanvas.width = displayWidth;
+      overlayCanvas.height = displayHeight;
+      overlayCanvas.classList.remove("hidden");
+      resultsWrap.classList.remove("empty");
+
+      const ctx = overlayCanvas.getContext("2d");
+      ctx.clearRect(0, 0, displayWidth, displayHeight);
+      ctx.drawImage(sourceImage, 0, 0, displayWidth, displayHeight);
+
+      Object.entries(regions).forEach(([name, region]) => {
+        if (!region || region.status === "error") return;
+
+        const bbox = scaleBbox(region.bbox, scaleX * displayScale, scaleY * displayScale);
+        const color = REGION_COLORS[name] || "#ffffff";
+        const width = bbox.x2 - bbox.x1;
+        const height = bbox.y2 - bbox.y1;
+
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(bbox.x1, bbox.y1, width, height);
+
+        ctx.fillStyle = color;
+        ctx.fillRect(bbox.x1, bbox.y1 - 18, Math.min(width, 90), 18);
+        ctx.fillStyle = "#0f172a";
+        ctx.font = "bold 11px sans-serif";
+        ctx.fillText(REGION_LABELS[name] || name, bbox.x1 + 4, bbox.y1 - 5);
+      });
+
+      legend.classList.remove("hidden");
+    }
+
+    function averageRgbFromPixels(rgbPixels) {
+      if (!rgbPixels?.length) return null;
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      for (const [pr, pg, pb] of rgbPixels) {
+        r += pr;
+        g += pg;
+        b += pb;
+      }
+      const count = rgbPixels.length;
+      return {
+        r: Math.round(r / count),
+        g: Math.round(g / count),
+        b: Math.round(b / count),
+      };
+    }
+
+    function renderPixelPatches(regionPatches) {
+      patchesGrid.innerHTML = "";
+
+      REGION_ORDER.forEach((name) => {
+        const patch = regionPatches?.[name];
+        const card = document.createElement("article");
+        card.className = "patch-card";
+
+        const title = document.createElement("h3");
+        title.textContent = REGION_LABELS[name];
+        card.appendChild(title);
+
+        const imageWrap = document.createElement("div");
+        imageWrap.className = "patch-image-wrap";
+
+        const swatch = document.createElement("div");
+        swatch.className = "swatch";
+        swatch.style.background = "#334155";
+
+        const rgbLabel = document.createElement("div");
+        rgbLabel.className = "rgb-label";
+        rgbLabel.textContent = "—";
+
+        if (patch?.rgb_pixels?.length === 225) {
+          imageWrap.textContent = "15×15";
+          imageWrap.style.fontSize = "1.1rem";
+          imageWrap.style.fontWeight = "600";
+          imageWrap.style.color = "var(--muted)";
+
+          const avg = averageRgbFromPixels(patch.rgb_pixels);
+          if (avg) {
+            swatch.style.background = `rgb(${avg.r}, ${avg.g}, ${avg.b})`;
+            rgbLabel.textContent = `225 px · avg RGB(${avg.r}, ${avg.g}, ${avg.b})`;
+          }
+        } else {
+          imageWrap.textContent = "Unavailable";
+          imageWrap.style.fontSize = "0.75rem";
+          imageWrap.style.color = "var(--muted)";
+        }
+
+        card.appendChild(imageWrap);
+        card.appendChild(swatch);
+        card.appendChild(rgbLabel);
+        patchesGrid.appendChild(card);
+      });
+
+      patchesSection.classList.remove("hidden");
+    }
+
+    async function analyzeBlob(blob, filename, contentType) {
+      disableControls(true);
+      setLoading(true);
+
+      try {
+        const formData = new FormData();
+        formData.append("file", blob, filename);
+
+        const response = await fetch("/api/v1/extract-skin-regions", {
+          method: "POST",
+          body: formData,
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || data.status === "error") {
+          throw new Error(data.message || data.detail || "Analysis failed.");
+        }
+
+        lastSourceImage = await loadImageFromBlob(blob);
+
+        const scaleX = data.image.original_width / data.image.processed_width;
+        const scaleY = data.image.original_height / data.image.processed_height;
+
+        drawOverlay(lastSourceImage, data.regions_metadata, scaleX, scaleY);
+        renderPixelPatches(data.region_patches);
+
+        const patchSize = data.total_pixels_per_patch
+          ? Math.round(Math.sqrt(data.total_pixels_per_patch))
+          : 15;
+        patchesHeading.textContent = `Extracted Skin Patches (${data.patch_dimensions || `${patchSize}×${patchSize}`})`;
+
+        const poseStatus = data.quality?.pose_status ?? "unknown";
+        const poseMeta = data.quality?.pose_metadata ?? {};
+        const poseNote = poseStatus === "face_turned_sideways"
+          ? " | Pose: face turned sideways"
+          : poseStatus === "centered"
+            ? " | Pose: centered"
+            : "";
+
+        metaBox.textContent =
+          `Processed ${data.image.original_width}×${data.image.original_height}` +
+          `${data.image.was_resized ? ` → ${data.image.processed_width}×${data.image.processed_height}` : ""}` +
+          ` | ${data.total_pixels_per_patch || 225} px/region` +
+          poseNote +
+          (poseMeta.symmetry_ratio != null ? ` (symmetry ${poseMeta.symmetry_ratio})` : "") +
+          ` | White balance applied`;
+        metaBox.classList.remove("hidden");
+
+        const statusType = poseStatus === "face_turned_sideways" ? "info" : "success";
+        setStatus(data.message || "Skin region pixel matrices extracted successfully.", statusType);
+      } catch (err) {
+        setStatus(err.message, "error");
+        patchesSection.classList.add("hidden");
+        legend.classList.add("hidden");
+        metaBox.classList.add("hidden");
+      } finally {
+        disableControls(false);
+        captureBtn.disabled = !mediaStream;
+        uploadAnalyzeBtn.disabled = !selectedFile;
+      }
+    }
+
+    async function captureFromWebcam() {
+      if (!mediaStream) return;
+
+      const width = webcamVideo.videoWidth;
+      const height = webcamVideo.videoHeight;
+      if (!width || !height) {
+        setStatus("Camera is not ready yet. Please wait a moment.", "error");
+        return;
+      }
+
+      captureCanvas.width = width;
+      captureCanvas.height = height;
+      const ctx = captureCanvas.getContext("2d");
+      ctx.drawImage(webcamVideo, 0, 0, width, height);
+
+      const blob = await new Promise((resolve) => captureCanvas.toBlob(resolve, "image/jpeg", 0.92));
+      await analyzeBlob(blob, "webcam_capture.jpg", "image/jpeg");
+    }
+
+    fileInput.addEventListener("change", () => {
+      selectedFile = fileInput.files?.[0] || null;
+      uploadAnalyzeBtn.disabled = !selectedFile;
+
+      if (selectedFile) {
+        const url = URL.createObjectURL(selectedFile);
+        uploadPreview.src = url;
+        uploadPreview.onload = () => URL.revokeObjectURL(url);
+        uploadPreview.classList.remove("hidden");
+        uploadWrap.classList.remove("empty");
+        setStatus(`Selected: ${selectedFile.name}. Click Analyze Upload.`, "info");
+      }
+    });
+
+    uploadAnalyzeBtn.addEventListener("click", async () => {
+      if (!selectedFile) return;
+      await analyzeBlob(selectedFile, selectedFile.name, selectedFile.type || "image/jpeg");
+    });
+
+    startCameraBtn.addEventListener("click", startCamera);
+    stopCameraBtn.addEventListener("click", stopCamera);
+    captureBtn.addEventListener("click", captureFromWebcam);
+
+    window.addEventListener("beforeunload", stopCamera);
+  </script>
+</body>
+</html>

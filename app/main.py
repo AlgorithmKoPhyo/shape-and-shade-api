@@ -1,4 +1,4 @@
-"""FastAPI server for raw skin region pixel extraction."""
+"""FastAPI server for skin region pixel extraction and undertone classification."""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from app.core.feature_extraction import (
     build_pixel_patch_response,
     build_regions_metadata,
+    extract_face_feature_vector,
 )
 from app.core.image_processing import (
     STANDARD_PATCH_SIZE,
@@ -29,6 +30,10 @@ from app.core.skin_extractor import (
     FaceNotDetectedError,
     ModelNotFoundError,
     SkinRegionExtractor,
+)
+from app.core.undertone_classifier import (
+    UndertoneClassifier,
+    UndertoneModelNotFoundError,
 )
 
 logger = logging.getLogger(__name__)
@@ -46,35 +51,45 @@ ALLOWED_CONTENT_TYPES = {
 }
 
 _extractor: SkinRegionExtractor | None = None
+_classifier: UndertoneClassifier | None = None
 prediction_history: list[dict[str, Any]] = []
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _extractor
+    global _extractor, _classifier
 
-    logger.info("Starting skin tone API; loading face landmarker model...")
+    logger.info("Starting skin tone API; loading models...")
     try:
         _extractor = SkinRegionExtractor(model_path=MODEL_PATH)
     except ModelNotFoundError as exc:
         logger.error("%s", exc)
         _extractor = None
 
+    try:
+        classifier = UndertoneClassifier()
+        classifier.load()
+        _classifier = classifier
+    except UndertoneModelNotFoundError as exc:
+        logger.warning("%s", exc)
+        _classifier = None
+
     yield
 
     if _extractor is not None:
         _extractor.close()
         _extractor = None
+    _classifier = None
     logger.info("Skin tone API shutdown complete.")
 
 
 app = FastAPI(
     title="Skin Tone Analysis API",
     description=(
-        "Raw skin region extraction API: face landmark detection, "
-        "15x15 patch cropping, and full RGB/LAB pixel matrix export."
+        "Skin region extraction and undertone classification API: face landmark detection, "
+        "15x15 RGB/LAB pixel matrix export, and ML-based Warm/Cool/Neutral prediction."
     ),
-    version="1.2.0",
+    version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -117,7 +132,6 @@ def _get_extractor() -> SkinRegionExtractor:
 
 
 def _infer_input_source(filename: str | None) -> str:
-    """Classify input as webcam capture or file upload."""
     if not filename:
         return "upload"
     lowered = filename.lower()
@@ -131,8 +145,8 @@ def _build_history_entry(
     content_type: str | None,
     pixel_payload: dict[str, Any],
     quality: dict[str, Any],
+    undertone_analysis: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """Build a history record containing raw 225-pixel region matrices."""
     return {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "filename": filename,
@@ -141,12 +155,12 @@ def _build_history_entry(
         "patch_dimensions": pixel_payload["patch_dimensions"],
         "total_pixels_per_patch": pixel_payload["total_pixels_per_patch"],
         "region_patches": pixel_payload["region_patches"],
+        "undertone_analysis": undertone_analysis,
         "quality": quality,
     }
 
 
 def _append_prediction_history(entry: dict[str, Any]) -> None:
-    """Append an analysis result to in-memory prediction history."""
     prediction_history.append(entry)
     logger.info(
         "Recorded analysis history entry #%s (source=%s, regions=%s)",
@@ -158,7 +172,7 @@ def _append_prediction_history(entry: dict[str, Any]) -> None:
 
 @app.get("/api/v1/history", tags=["History"])
 async def get_prediction_history() -> dict[str, Any]:
-    """Return all past raw pixel-matrix analysis results."""
+    """Return all past skin tone analysis results."""
     return {
         "status": "success",
         "count": len(prediction_history),
@@ -190,6 +204,7 @@ async def get_latest_webcam_history() -> JSONResponse:
             "patch_dimensions": latest["patch_dimensions"],
             "total_pixels_per_patch": latest["total_pixels_per_patch"],
             "region_patches": latest["region_patches"],
+            "undertone_analysis": latest.get("undertone_analysis"),
             "timestamp": latest["timestamp"],
             "filename": latest.get("filename"),
             "source": latest.get("source"),
@@ -217,6 +232,7 @@ async def health_check() -> dict[str, Any]:
         "status": "ok",
         "face_model_loaded": _extractor is not None,
         "face_model_path": str(MODEL_PATH),
+        "undertone_model_loaded": _classifier is not None and _classifier.is_loaded,
     }
 
 
@@ -225,8 +241,8 @@ async def extract_skin_regions_endpoint(
     file: UploadFile = File(..., description="Face image (upload or webcam frame)"),
 ) -> JSONResponse:
     """
-    Process an uploaded image and return raw 15x15 RGB/LAB pixel matrices
-    for forehead, left cheek, right cheek, and chin skin patches.
+    Process an uploaded image, extract 15x15 RGB/LAB pixel matrices,
+    and classify skin undertone (Warm / Cool / Neutral) if the model is loaded.
     """
     content_type = (file.content_type or "").lower()
     if content_type and content_type not in ALLOWED_CONTENT_TYPES:
@@ -252,13 +268,32 @@ async def extract_skin_regions_endpoint(
             patch_size=STANDARD_PATCH_SIZE,
         )
 
+        # Stage 2: 12D Feature Aggregation & Undertone Classification
+        aggregated = extract_face_feature_vector(extraction)
+        undertone_analysis: dict[str, Any] | None = None
+        if _classifier is not None and _classifier.is_loaded:
+            prediction = _classifier.predict(aggregated["feature_vector"])
+            undertone_analysis = {
+                "undertone": prediction["undertone"],
+                "confidence": prediction["confidence"],
+                "probabilities": prediction["probabilities"],
+                "features": aggregated["features"],
+                "regions_used": aggregated["regions_used"],
+            }
+        else:
+            undertone_analysis = {
+                "status": "model_not_loaded",
+                "features": aggregated["features"],
+                "regions_used": aggregated["regions_used"],
+            }
+
         processed_height, processed_width = balanced_image.shape[:2]
         pose_status = extraction.get("pose_status", "unknown")
 
-        message = "Skin region pixel matrices extracted successfully."
+        message = "Skin region pixel matrices and undertone analyzed successfully."
         if pose_status == "face_turned_sideways":
             message = (
-                "Pixel matrices extracted, but the face appears turned sideways. "
+                "Analysis complete, but the face appears turned sideways. "
                 "For best accuracy, face the camera directly."
             )
 
@@ -273,6 +308,7 @@ async def extract_skin_regions_endpoint(
         response_payload = {
             "status": "success",
             "message": message,
+            "undertone_analysis": undertone_analysis,
             "patch_dimensions": pixel_payload["patch_dimensions"],
             "total_pixels_per_patch": pixel_payload["total_pixels_per_patch"],
             "region_patches": pixel_payload["region_patches"],
@@ -297,6 +333,7 @@ async def extract_skin_regions_endpoint(
             content_type=file.content_type,
             pixel_payload=pixel_payload,
             quality=quality,
+            undertone_analysis=undertone_analysis,
         )
         _append_prediction_history(history_entry)
         response_payload["history_id"] = len(prediction_history)
@@ -324,7 +361,7 @@ async def extract_skin_regions_endpoint(
     except HTTPException:
         raise
     except Exception as exc:
-        logger.exception("Unexpected error during skin region extraction")
+        logger.exception("Unexpected error during skin tone analysis")
         raise HTTPException(status_code=500, detail=f"Internal server error: {exc}") from exc
 
 
